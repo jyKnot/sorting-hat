@@ -1,0 +1,2368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <meta name="theme-color" content="#090806" />
+
+  <title>The Sorting Hat</title>
+
+  <!--
+    The app still works without internet access. If Google Fonts cannot load,
+    the system font fallbacks below are used automatically.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,500&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    :root {
+      --background: #090806;
+      --panel: #15110c;
+      --panel-light: #21190f;
+      --gold: #c9a54b;
+      --gold-light: #f1d486;
+      --parchment: #e8ddbd;
+      --text-muted: #b9ad91;
+      --danger: #d48672;
+      --success: #9fc38a;
+      --border: rgba(201, 165, 75, 0.28);
+      --shadow: rgba(0, 0, 0, 0.72);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    body {
+      font-family: "EB Garamond", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      color: var(--parchment);
+      background:
+        radial-gradient(circle at 50% 28%, rgba(170, 118, 42, 0.14), transparent 34%),
+        radial-gradient(circle at 10% 90%, rgba(90, 20, 20, 0.15), transparent 30%),
+        radial-gradient(circle at 90% 90%, rgba(80, 55, 20, 0.08), transparent 25%),
+        linear-gradient(180deg, #15120d 0%, #090806 68%, #050403 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    body.result-open {
+      overflow: hidden;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    dialog:focus-visible {
+      outline: 3px solid var(--gold-light);
+      outline-offset: 4px;
+    }
+
+    .visually-hidden {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    /* =========================================
+       MAGIC PARTICLES
+    ========================================= */
+
+    .stars {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      border-radius: 50%;
+      background: var(--gold-light);
+      opacity: 0;
+      box-shadow: 0 0 5px rgba(241, 212, 134, 0.8);
+      animation: twinkle 4s infinite ease-in-out;
+    }
+
+    @keyframes twinkle {
+      0%,
+      100% {
+        opacity: 0;
+        transform: scale(0.4);
+      }
+
+      50% {
+        opacity: 0.85;
+        transform: scale(1.5);
+      }
+    }
+
+    /* =========================================
+       MAIN APP
+    ========================================= */
+
+    .app {
+      position: relative;
+      z-index: 5;
+      width: min(1100px, 96vw);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding:
+        max(18px, env(safe-area-inset-top))
+        clamp(14px, 3vw, 32px)
+        max(44px, env(safe-area-inset-bottom));
+      transition: opacity 0.35s ease, filter 0.35s ease, transform 0.35s ease;
+    }
+
+    .app.is-obscured {
+      opacity: 0.06;
+      filter: blur(3px);
+      transform: scale(0.985);
+      pointer-events: none;
+    }
+
+    .eyebrow,
+    h1,
+    .tap-instruction,
+    .host-trigger,
+    .result-small,
+    .table-word,
+    .next-button,
+    .footer,
+    .host-dialog h2,
+    .host-dialog h3,
+    .host-button,
+    .host-close,
+    .host-field-label,
+    .summary-label,
+    .table-row-title,
+    .table-active-label {
+      font-family: "Cinzel", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    }
+
+    .eyebrow {
+      font-size: clamp(0.65rem, 1.2vw, 0.95rem);
+      text-transform: uppercase;
+      letter-spacing: clamp(0.18rem, 0.5vw, 0.34rem);
+      color: var(--gold);
+      margin-bottom: clamp(5px, 1vh, 10px);
+    }
+
+    h1 {
+      font-size: clamp(2.3rem, 7vw, 6rem);
+      line-height: 0.95;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gold-light);
+      text-shadow:
+        0 0 8px rgba(201, 165, 75, 0.18),
+        0 5px 20px rgba(0, 0, 0, 0.9);
+    }
+
+    .subtitle {
+      width: min(650px, 90vw);
+      margin: clamp(6px, 1vh, 14px) auto clamp(4px, 1vh, 10px);
+      font-size: clamp(1rem, 2.2vw, 1.65rem);
+      line-height: 1.35;
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    /* =========================================
+       HAT STAGE
+    ========================================= */
+
+    .hat-stage {
+      position: relative;
+      width: 100%;
+      height: clamp(240px, 45vh, 460px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: clamp(-10px, -1vh, 0px) 0 clamp(0px, 1vh, 12px);
+    }
+
+    .glow {
+      position: absolute;
+      width: min(55vw, 500px);
+      height: min(18vh, 180px);
+      bottom: 5%;
+      border-radius: 50%;
+      background: rgba(211, 165, 64, 0.12);
+      filter: blur(clamp(25px, 5vw, 50px));
+      opacity: 0.8;
+      transition: transform 0.5s ease, background 0.5s ease, opacity 0.5s ease;
+    }
+
+    /* =========================================
+       HAT
+    ========================================= */
+
+    .hat {
+      appearance: none;
+      position: relative;
+      z-index: 3;
+      width: min(42vw, 42vh, 400px);
+      aspect-ratio: 1 / 1;
+      height: auto;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      transform-origin: center bottom;
+      transition: transform 0.22s ease, filter 0.4s ease, opacity 0.25s ease;
+    }
+
+    .hat:not(:disabled):active {
+      transform: scale(0.96);
+    }
+
+    .hat:disabled:not(.sorting) {
+      cursor: default;
+      opacity: 0.58;
+    }
+
+    .hat-top {
+      position: absolute;
+      left: 23.3%;
+      bottom: 20%;
+      width: 53.3%;
+      height: 80.5%;
+      background: linear-gradient(
+        105deg,
+        #5d4128 0%,
+        #362518 20%,
+        #1b120c 48%,
+        #543821 70%,
+        #25170e 100%
+      );
+      clip-path: polygon(
+        51% 0%,
+        68% 13%,
+        64% 26%,
+        78% 39%,
+        71% 52%,
+        83% 67%,
+        70% 75%,
+        94% 100%,
+        7% 100%,
+        23% 74%,
+        16% 54%,
+        31% 34%,
+        37% 17%
+      );
+      filter: drop-shadow(0 18px 20px rgba(0, 0, 0, 0.8));
+    }
+
+    .hat-top::before,
+    .hat-top::after {
+      content: "";
+      position: absolute;
+      height: 2%;
+      border-radius: 50%;
+      background: rgba(8, 5, 3, 0.6);
+    }
+
+    .hat-top::before {
+      width: 38%;
+      left: 18%;
+      top: 38%;
+      transform: rotate(-8deg);
+    }
+
+    .hat-top::after {
+      width: 45%;
+      left: 26%;
+      top: 59%;
+      transform: rotate(8deg);
+    }
+
+    .hat-band {
+      position: absolute;
+      width: 94%;
+      height: 24%;
+      left: 3%;
+      bottom: 10%;
+      border-radius: 50%;
+      background: radial-gradient(
+        ellipse at 50% 35%,
+        #604126 0%,
+        #3f2919 32%,
+        #24170f 63%,
+        #0d0906 100%
+      );
+      transform: rotate(-2deg);
+      box-shadow:
+        0 20px 30px rgba(0, 0, 0, 0.82),
+        inset 0 -7px 12px rgba(0, 0, 0, 0.8);
+    }
+
+    .hat-eye {
+      position: absolute;
+      z-index: 4;
+      width: 14.5%;
+      height: 2%;
+      bottom: 48%;
+      background: #080503;
+      border-radius: 50%;
+    }
+
+    .hat-eye.left {
+      left: 29%;
+      transform: rotate(15deg);
+    }
+
+    .hat-eye.right {
+      right: 27%;
+      transform: rotate(-15deg);
+    }
+
+    .hat-mouth {
+      position: absolute;
+      z-index: 4;
+      width: 27%;
+      height: 7%;
+      left: 36.5%;
+      bottom: 35%;
+      border-bottom: clamp(4px, 1vw, 8px) solid #080503;
+      border-radius: 50%;
+      transform: rotate(4deg);
+    }
+
+    /* =========================================
+       INSTRUCTION AND MESSAGE
+    ========================================= */
+
+    .tap-instruction {
+      font-size: clamp(0.72rem, 1.5vw, 1.05rem);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--gold);
+      margin-top: clamp(-30px, -2vh, -8px);
+      margin-bottom: clamp(5px, 1vh, 12px);
+      animation: instructionPulse 2.2s infinite ease-in-out;
+      transition: opacity 0.3s ease;
+    }
+
+    .tap-instruction.is-hidden {
+      animation: none;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .tap-instruction.is-static {
+      animation: none;
+      opacity: 0.9;
+    }
+
+    @keyframes instructionPulse {
+      0%,
+      100% {
+        opacity: 0.55;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+
+    .message {
+      width: min(720px, 92vw);
+      min-height: clamp(38px, 6vh, 60px);
+      font-size: clamp(1.1rem, 2.5vw, 1.9rem);
+      line-height: 1.25;
+      font-style: italic;
+      color: var(--parchment);
+      opacity: 0.95;
+    }
+
+    /* =========================================
+       SORTING ANIMATION
+    ========================================= */
+
+    .hat.sorting {
+      animation: hatThink 0.72s ease-in-out infinite alternate;
+      filter: brightness(1.14) drop-shadow(0 0 20px rgba(201, 165, 75, 0.16));
+      opacity: 1;
+    }
+
+    .hat.sorting .hat-mouth {
+      animation: mouthTalk 0.38s ease-in-out infinite alternate;
+    }
+
+    .hat.sorting .hat-eye.left {
+      animation: eyeLeft 0.7s ease-in-out infinite alternate;
+    }
+
+    .hat.sorting .hat-eye.right {
+      animation: eyeRight 0.7s ease-in-out infinite alternate;
+    }
+
+    .hat-stage.sorting .glow {
+      transform: scale(1.35);
+      background: rgba(224, 181, 75, 0.23);
+      opacity: 1;
+    }
+
+    @keyframes hatThink {
+      0% {
+        transform: translateY(0) rotate(-2deg) scale(1);
+      }
+
+      50% {
+        transform: translateY(-12px) rotate(2deg) scale(1.025);
+      }
+
+      100% {
+        transform: translateY(-4px) rotate(-3deg) scale(1);
+      }
+    }
+
+    @keyframes mouthTalk {
+      from {
+        transform: rotate(4deg) scaleY(0.8);
+      }
+
+      to {
+        transform: rotate(2deg) scaleY(1.6);
+      }
+    }
+
+    @keyframes eyeLeft {
+      from {
+        transform: rotate(15deg) translateY(0);
+      }
+
+      to {
+        transform: rotate(9deg) translateY(-3px);
+      }
+    }
+
+    @keyframes eyeRight {
+      from {
+        transform: rotate(-15deg) translateY(0);
+      }
+
+      to {
+        transform: rotate(-10deg) translateY(-3px);
+      }
+    }
+
+    /* =========================================
+       FLASH
+    ========================================= */
+
+    .flash {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(
+        circle at center,
+        rgba(255, 232, 165, 0.9),
+        rgba(206, 161, 61, 0.24),
+        transparent 70%
+      );
+    }
+
+    .flash.active {
+      animation: magicalFlash 0.6s ease;
+    }
+
+    @keyframes magicalFlash {
+      0% {
+        opacity: 0;
+      }
+
+      20% {
+        opacity: 0.86;
+      }
+
+      100% {
+        opacity: 0;
+      }
+    }
+
+    /* =========================================
+       RESULT SCREEN
+    ========================================= */
+
+    .result {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: radial-gradient(
+        circle at center,
+        rgba(53, 37, 17, 0.985) 0%,
+        rgba(11, 8, 5, 0.995) 55%,
+        rgba(5, 4, 3, 1) 100%
+      );
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding:
+        max(25px, env(safe-area-inset-top))
+        20px
+        max(25px, env(safe-area-inset-bottom));
+      cursor: pointer;
+    }
+
+    .result.show {
+      display: flex;
+      animation: resultBackground 0.55s ease forwards;
+    }
+
+    .result-small {
+      font-size: clamp(0.75rem, 2vw, 1.3rem);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+    }
+
+    .table-word {
+      font-size: clamp(2rem, 7vw, 5rem);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--parchment);
+      margin-top: clamp(6px, 1vh, 12px);
+    }
+
+    .table-number {
+      display: block;
+      max-width: 90vw;
+      font-family: "Cinzel", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      font-size: clamp(7rem, 30vw, 18rem);
+      font-weight: 700;
+      line-height: 0.85;
+      color: var(--gold-light);
+      margin: clamp(10px, 2vh, 20px) 0;
+      text-shadow:
+        0 0 20px rgba(241, 212, 134, 0.3),
+        0 0 60px rgba(201, 165, 75, 0.2),
+        0 12px 40px rgba(0, 0, 0, 0.9);
+      animation: tableReveal 0.9s cubic-bezier(0.17, 0.89, 0.32, 1.35);
+    }
+
+    .table-name {
+      display: none;
+      max-width: min(760px, 90vw);
+      margin-top: clamp(2px, 1vh, 10px);
+      font-size: clamp(1.25rem, 3vw, 2.2rem);
+      line-height: 1.15;
+      color: var(--parchment);
+      font-style: italic;
+    }
+
+    .table-name.has-name {
+      display: block;
+    }
+
+    .result-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: clamp(18px, 4vh, 38px);
+    }
+
+    .next-button {
+      border: 1px solid rgba(241, 212, 134, 0.55);
+      border-radius: 999px;
+      padding: 12px 24px;
+      background: linear-gradient(180deg, rgba(201, 165, 75, 0.22), rgba(201, 165, 75, 0.08));
+      color: var(--gold-light);
+      font-size: clamp(0.72rem, 1.5vw, 0.96rem);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+      animation: fadeIn 0.55s ease 0.75s both;
+    }
+
+    .next-button:hover {
+      background: linear-gradient(180deg, rgba(201, 165, 75, 0.32), rgba(201, 165, 75, 0.12));
+    }
+
+    .continue-text {
+      font-family: "Cinzel", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+      font-size: clamp(0.6rem, 1.3vw, 0.82rem);
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: var(--text-muted);
+      opacity: 0;
+      animation: fadeIn 0.55s ease 1s forwards;
+    }
+
+    @keyframes resultBackground {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes tableReveal {
+      0% {
+        opacity: 0;
+        transform: scale(0.2) rotate(-4deg);
+        filter: blur(14px);
+      }
+
+      55% {
+        opacity: 1;
+        transform: scale(1.15) rotate(1deg);
+      }
+
+      100% {
+        transform: scale(1) rotate(0);
+        filter: blur(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* =========================================
+       HOST CONTROLS
+    ========================================= */
+
+    .host-trigger {
+      position: fixed;
+      top: max(12px, env(safe-area-inset-top));
+      right: max(12px, env(safe-area-inset-right));
+      z-index: 12;
+      border: 1px solid rgba(201, 165, 75, 0.25);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: rgba(10, 8, 5, 0.62);
+      color: rgba(232, 221, 189, 0.72);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .host-trigger:hover {
+      color: var(--gold-light);
+      border-color: rgba(241, 212, 134, 0.55);
+    }
+
+    .host-trigger:disabled,
+    body.result-open .host-trigger {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .host-dialog {
+      width: min(940px, calc(100vw - 28px));
+      max-height: min(90dvh, 900px);
+      margin: auto;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 0;
+      color: var(--parchment);
+      background: linear-gradient(180deg, rgba(30, 23, 15, 0.995), rgba(10, 8, 5, 0.995));
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+    }
+
+    .host-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(5px);
+    }
+
+    .host-dialog-inner {
+      max-height: min(90dvh, 900px);
+      overflow-y: auto;
+      padding: clamp(18px, 3vw, 34px);
+    }
+
+    .host-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .host-dialog h2 {
+      color: var(--gold-light);
+      font-size: clamp(1.35rem, 3vw, 2.15rem);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .host-intro {
+      margin-top: 6px;
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1.4;
+    }
+
+    .host-close {
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--parchment);
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    .host-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .summary-card {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .summary-label {
+      display: block;
+      color: var(--gold);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 5px;
+    }
+
+    .summary-value {
+      display: block;
+      color: var(--parchment);
+      font-size: clamp(1.1rem, 2vw, 1.45rem);
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+
+    .host-section {
+      border-top: 1px solid rgba(201, 165, 75, 0.16);
+      padding-top: 22px;
+      margin-top: 22px;
+    }
+
+    .host-dialog h3 {
+      color: var(--gold-light);
+      font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .table-settings {
+      display: grid;
+      gap: 10px;
+    }
+
+    .table-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.9fr) minmax(150px, 1.5fr) minmax(86px, 0.7fr) minmax(90px, 0.65fr);
+      gap: 12px;
+      align-items: end;
+      border: 1px solid rgba(201, 165, 75, 0.14);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .table-row-heading {
+      align-self: center;
+    }
+
+    .table-row-title {
+      display: block;
+      color: var(--parchment);
+      font-size: 0.87rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+    }
+
+    .table-row-count {
+      display: block;
+      margin-top: 4px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .host-field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .host-field-label,
+    .table-active-label {
+      color: var(--gold);
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .host-field input[type="text"],
+    .host-field input[type="number"] {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid rgba(201, 165, 75, 0.28);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--parchment);
+    }
+
+    .table-active-wrap {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 4px;
+    }
+
+    .table-active-wrap input,
+    .settings-check input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--gold);
+    }
+
+    .host-settings-grid {
+      display: grid;
+      grid-template-columns: minmax(170px, 1fr) repeat(3, minmax(120px, 0.8fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .settings-check {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--parchment);
+      font-size: 0.96rem;
+    }
+
+    .host-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .host-button {
+      border: 1px solid rgba(201, 165, 75, 0.34);
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: rgba(201, 165, 75, 0.1);
+      color: var(--parchment);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      cursor: pointer;
+    }
+
+    .host-button:hover {
+      border-color: rgba(241, 212, 134, 0.64);
+      color: var(--gold-light);
+    }
+
+    .host-button.primary {
+      background: linear-gradient(180deg, rgba(201, 165, 75, 0.3), rgba(201, 165, 75, 0.12));
+      color: var(--gold-light);
+    }
+
+    .host-button.danger {
+      border-color: rgba(212, 134, 114, 0.42);
+      color: #efb4a5;
+      background: rgba(110, 35, 25, 0.12);
+    }
+
+    .host-button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .host-status {
+      min-height: 24px;
+      margin-top: 14px;
+      color: var(--success);
+      font-size: 0.95rem;
+      line-height: 1.35;
+    }
+
+    .host-status.is-error {
+      color: var(--danger);
+    }
+
+    /* =========================================
+       FOOTER
+    ========================================= */
+
+    .footer {
+      position: fixed;
+      z-index: 6;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(94vw, 880px);
+      text-align: center;
+      font-size: clamp(0.56rem, 1vw, 0.72rem);
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: #8f8269;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* =========================================
+       RESPONSIVE LAYOUT
+    ========================================= */
+
+    @media (orientation: portrait) {
+      .hat {
+        width: min(70vw, 44vh, 430px);
+      }
+
+      .hat-stage {
+        height: clamp(280px, 48vh, 480px);
+      }
+    }
+
+    @media (orientation: landscape) {
+      .app {
+        padding-top: clamp(10px, 2vh, 24px);
+        padding-bottom: clamp(36px, 5vh, 56px);
+      }
+
+      .hat {
+        width: min(33vw, 44vh, 350px);
+      }
+
+      .hat-stage {
+        height: clamp(200px, 42vh, 340px);
+      }
+
+      h1 {
+        font-size: clamp(2.2rem, 5vw, 4.6rem);
+      }
+
+      .subtitle {
+        font-size: clamp(0.95rem, 1.7vw, 1.35rem);
+      }
+
+      .table-number {
+        font-size: clamp(7rem, 22vw, 14rem);
+      }
+    }
+
+    @media (max-height: 600px) {
+      .eyebrow,
+      .subtitle {
+        display: none;
+      }
+
+      .hat-stage {
+        height: 58vh;
+      }
+
+      .hat {
+        width: min(34vw, 52vh, 300px);
+      }
+
+      .tap-instruction {
+        margin-top: -20px;
+      }
+
+      .result-actions {
+        margin-top: 12px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .host-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .table-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .table-row-heading {
+        grid-column: 1 / -1;
+      }
+
+      .host-settings-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app {
+        width: 100vw;
+        padding: 18px 14px 50px;
+      }
+
+      .hat {
+        width: min(78vw, 42vh, 330px);
+      }
+
+      .table-number {
+        font-size: clamp(6rem, 38vw, 11rem);
+      }
+
+      .host-trigger {
+        padding: 7px 10px;
+        font-size: 0.62rem;
+      }
+
+      .host-dialog-inner {
+        padding: 18px 14px 24px;
+      }
+
+      .table-row,
+      .host-settings-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .table-row-heading {
+        grid-column: auto;
+      }
+
+      .host-actions {
+        display: grid;
+      }
+
+      .host-button {
+        width: 100%;
+      }
+    }
+
+    @media (min-width: 1400px) {
+      .hat {
+        width: min(28vw, 46vh, 460px);
+      }
+
+      .hat-stage {
+        height: min(52vh, 520px);
+      }
+    }
+
+    /* =========================================
+       REDUCED MOTION
+    ========================================= */
+
+    @media (prefers-reduced-motion: reduce) {
+      .star {
+        display: none;
+      }
+
+      .tap-instruction,
+      .tap-instruction.is-static {
+        animation: none;
+        opacity: 1;
+      }
+
+      .tap-instruction.is-hidden {
+        opacity: 0;
+      }
+
+      .hat.sorting,
+      .hat.sorting .hat-mouth,
+      .hat.sorting .hat-eye.left,
+      .hat.sorting .hat-eye.right,
+      .result.show,
+      .table-number,
+      .next-button,
+      .continue-text,
+      .flash.active {
+        animation: none;
+      }
+
+      .continue-text {
+        opacity: 1;
+      }
+
+      .flash.active {
+        opacity: 0.12;
+      }
+
+      .app,
+      .glow,
+      .hat,
+      .tap-instruction {
+        transition-duration: 0.01ms;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="stars" id="stars" aria-hidden="true"></div>
+  <div class="flash" id="flash" aria-hidden="true"></div>
+
+  <button
+    class="host-trigger"
+    id="hostTrigger"
+    type="button"
+    aria-haspopup="dialog"
+    aria-controls="hostDialog"
+  >
+    Host
+  </button>
+
+  <main class="app" id="app">
+    <div class="eyebrow">The Annual Christmas Feast</div>
+
+    <h1>The Sorting Hat</h1>
+
+    <p class="subtitle">
+      Place your fate in the hands of the hat. Your table awaits.
+    </p>
+
+    <div class="hat-stage" id="hatStage">
+      <button
+        class="hat"
+        id="hat"
+        type="button"
+        aria-label="Begin the Sorting Hat ceremony"
+        aria-describedby="tapInstruction message"
+      >
+        <span class="hat-top" aria-hidden="true"></span>
+        <span class="hat-band" aria-hidden="true"></span>
+        <span class="hat-eye left" aria-hidden="true"></span>
+        <span class="hat-eye right" aria-hidden="true"></span>
+        <span class="hat-mouth" aria-hidden="true"></span>
+      </button>
+
+      <div class="glow" aria-hidden="true"></div>
+    </div>
+
+    <div class="tap-instruction" id="tapInstruction">
+      Tap the hat to be sorted
+    </div>
+
+    <div class="message" id="message">
+      The hat is waiting...
+    </div>
+  </main>
+
+  <section
+    class="result"
+    id="result"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="resultHeading"
+    aria-describedby="resultDescription"
+  >
+    <span class="result-small" id="resultHeading">
+      The hat has chosen
+    </span>
+
+    <span class="table-word">Table</span>
+
+    <span class="table-number" id="tableNumber">7</span>
+
+    <span class="table-name" id="tableName"></span>
+
+    <div class="result-actions">
+      <button class="next-button" id="nextGuestButton" type="button">
+        Next guest
+      </button>
+
+      <div class="continue-text" id="resultDescription">
+        Tap anywhere or press Escape to continue
+      </div>
+    </div>
+  </section>
+
+  <div
+    class="visually-hidden"
+    id="resultAnnouncement"
+    aria-live="polite"
+    aria-atomic="true"
+  ></div>
+
+  <footer class="footer" id="footer">
+    <span>Christmas Feast &bull; Sorting Ceremony</span>
+    <span id="footerSession"></span>
+  </footer>
+
+  <dialog class="host-dialog" id="hostDialog" aria-labelledby="hostTitle">
+    <div class="host-dialog-inner">
+      <div class="host-header">
+        <div>
+          <h2 id="hostTitle">Host controls</h2>
+          <p class="host-intro">
+            Configure table capacity, review assignments, undo mistakes, and export the session.
+          </p>
+        </div>
+
+        <button class="host-close" id="hostClose" type="button" aria-label="Close host controls">
+          &times;
+        </button>
+      </div>
+
+      <div class="host-summary" id="hostSummary"></div>
+
+      <form id="hostForm">
+        <section class="host-section" aria-labelledby="tableSettingsHeading">
+          <h3 id="tableSettingsHeading">Table settings</h3>
+          <div class="table-settings" id="tableSettings"></div>
+        </section>
+
+        <section class="host-section" aria-labelledby="ceremonySettingsHeading">
+          <h3 id="ceremonySettingsHeading">Ceremony settings</h3>
+
+          <div class="host-settings-grid">
+            <label class="host-field">
+              <span class="host-field-label">Sorting time (seconds)</span>
+              <input
+                id="sortingTimeInput"
+                type="number"
+                min="1"
+                max="10"
+                step="0.1"
+                inputmode="decimal"
+              />
+            </label>
+
+            <label class="settings-check">
+              <input id="soundInput" type="checkbox" />
+              Sound
+            </label>
+
+            <label class="settings-check">
+              <input id="speechInput" type="checkbox" />
+              Speak result
+            </label>
+
+            <label class="settings-check">
+              <input id="hapticsInput" type="checkbox" />
+              Vibration
+            </label>
+          </div>
+        </section>
+
+        <div class="host-actions">
+          <button class="host-button primary" type="submit">Save settings</button>
+          <button class="host-button" id="undoButton" type="button">Undo last</button>
+          <button class="host-button" id="repeatButton" type="button">Show last result</button>
+          <button class="host-button" id="exportButton" type="button">Export CSV</button>
+          <button class="host-button danger" id="newSessionButton" type="button">New session</button>
+        </div>
+
+        <p class="host-status" id="hostStatus" role="status" aria-live="polite"></p>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    /* =========================================
+       SETTINGS AND DEFAULTS
+    ========================================= */
+
+    const STORAGE_KEY = "sortingHatSessionV3";
+    const STATE_VERSION = 3;
+    const DEFAULT_TABLE_COUNT = 10;
+    const DEFAULT_TABLE_CAPACITY = 10;
+
+    const thinkingMessages = [
+      "Hmmmm...",
+      "Interesting... very interesting...",
+      "Where shall I put you?",
+      "A difficult decision...",
+      "Let me think...",
+      "I see great things...",
+      "Ah yes...",
+      "I know exactly where you belong..."
+    ];
+
+    /* =========================================
+       ELEMENTS
+    ========================================= */
+
+    const elements = {
+      app: document.getElementById("app"),
+      stars: document.getElementById("stars"),
+      flash: document.getElementById("flash"),
+      hat: document.getElementById("hat"),
+      hatStage: document.getElementById("hatStage"),
+      tapInstruction: document.getElementById("tapInstruction"),
+      message: document.getElementById("message"),
+      result: document.getElementById("result"),
+      resultHeading: document.getElementById("resultHeading"),
+      tableNumber: document.getElementById("tableNumber"),
+      tableName: document.getElementById("tableName"),
+      nextGuestButton: document.getElementById("nextGuestButton"),
+      resultAnnouncement: document.getElementById("resultAnnouncement"),
+      footer: document.getElementById("footer"),
+      footerSession: document.getElementById("footerSession"),
+      hostTrigger: document.getElementById("hostTrigger"),
+      hostDialog: document.getElementById("hostDialog"),
+      hostClose: document.getElementById("hostClose"),
+      hostForm: document.getElementById("hostForm"),
+      hostSummary: document.getElementById("hostSummary"),
+      tableSettings: document.getElementById("tableSettings"),
+      sortingTimeInput: document.getElementById("sortingTimeInput"),
+      soundInput: document.getElementById("soundInput"),
+      speechInput: document.getElementById("speechInput"),
+      hapticsInput: document.getElementById("hapticsInput"),
+      undoButton: document.getElementById("undoButton"),
+      repeatButton: document.getElementById("repeatButton"),
+      exportButton: document.getElementById("exportButton"),
+      newSessionButton: document.getElementById("newSessionButton"),
+      hostStatus: document.getElementById("hostStatus")
+    };
+
+    /* =========================================
+       APP STATE
+    ========================================= */
+
+    let isSorting = false;
+    let isShowingResult = false;
+    let messageInterval = null;
+    let revealTimer = null;
+    let longPressTimer = null;
+    let audioContext = null;
+
+    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let prefersReducedMotion = reducedMotionQuery.matches;
+
+    function createDefaultState() {
+      return {
+        version: STATE_VERSION,
+        tables: Array.from({ length: DEFAULT_TABLE_COUNT }, function(_, index) {
+          return {
+            id: index + 1,
+            name: "",
+            capacity: DEFAULT_TABLE_CAPACITY,
+            active: true
+          };
+        }),
+        history: [],
+        seatPool: [],
+        settings: {
+          sortingTime: 4200,
+          sound: false,
+          speech: false,
+          haptics: false
+        }
+      };
+    }
+
+    function clampNumber(value, minimum, maximum, fallback) {
+      const number = Number(value);
+
+      if (!Number.isFinite(number)) {
+        return fallback;
+      }
+
+      return Math.min(maximum, Math.max(minimum, number));
+    }
+
+    function getAssignedCounts(session) {
+      const counts = {};
+
+      session.tables.forEach(function(table) {
+        counts[table.id] = 0;
+      });
+
+      session.history.forEach(function(assignment) {
+        if (Object.prototype.hasOwnProperty.call(counts, assignment.tableId)) {
+          counts[assignment.tableId] += 1;
+        }
+      });
+
+      return counts;
+    }
+
+    function shuffle(items) {
+      const shuffled = items.slice();
+
+      for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        const temporary = shuffled[index];
+        shuffled[index] = shuffled[randomIndex];
+        shuffled[randomIndex] = temporary;
+      }
+
+      return shuffled;
+    }
+
+    /*
+      Builds the assignment pool in occupancy rounds. Each active table receives
+      one randomized assignment before any equally filled table receives another.
+      This keeps the room balanced while still making each reveal feel random.
+    */
+    function buildBalancedSeatPool(session) {
+      const counts = getAssignedCounts(session);
+      const activeTables = session.tables.filter(function(table) {
+        return table.active && table.capacity > counts[table.id];
+      });
+
+      const maximumCapacity = activeTables.reduce(function(maximum, table) {
+        return Math.max(maximum, table.capacity);
+      }, 0);
+
+      const pool = [];
+      let previousTableId = session.history.length
+        ? session.history[session.history.length - 1].tableId
+        : null;
+
+      for (let targetOccupancy = 1; targetOccupancy <= maximumCapacity; targetOccupancy += 1) {
+        let round = activeTables
+          .filter(function(table) {
+            return counts[table.id] < targetOccupancy && table.capacity >= targetOccupancy;
+          })
+          .map(function(table) {
+            return table.id;
+          });
+
+        round = shuffle(round);
+
+        if (round.length > 1 && round[0] === previousTableId) {
+          const swapIndex = round.findIndex(function(tableId) {
+            return tableId !== previousTableId;
+          });
+
+          if (swapIndex > 0) {
+            const temporary = round[0];
+            round[0] = round[swapIndex];
+            round[swapIndex] = temporary;
+          }
+        }
+
+        pool.push.apply(pool, round);
+
+        if (round.length) {
+          previousTableId = round[round.length - 1];
+        }
+      }
+
+      return pool;
+    }
+
+    function isSeatPoolValid(pool, session) {
+      if (!Array.isArray(pool)) {
+        return false;
+      }
+
+      const counts = getAssignedCounts(session);
+      const expected = {};
+      const actual = {};
+
+      session.tables.forEach(function(table) {
+        expected[table.id] = table.active
+          ? Math.max(0, table.capacity - counts[table.id])
+          : 0;
+        actual[table.id] = 0;
+      });
+
+      for (const tableId of pool) {
+        if (!Number.isInteger(tableId) || !Object.prototype.hasOwnProperty.call(actual, tableId)) {
+          return false;
+        }
+
+        actual[tableId] += 1;
+      }
+
+      return session.tables.every(function(table) {
+        return actual[table.id] === expected[table.id];
+      });
+    }
+
+    function normalizeState(candidate) {
+      const defaults = createDefaultState();
+
+      if (!candidate || typeof candidate !== "object") {
+        defaults.seatPool = buildBalancedSeatPool(defaults);
+        return defaults;
+      }
+
+      const sourceTables = Array.isArray(candidate.tables) ? candidate.tables : [];
+
+      const tables = defaults.tables.map(function(defaultTable) {
+        const source = sourceTables.find(function(table) {
+          return Number(table.id) === defaultTable.id;
+        }) || {};
+
+        return {
+          id: defaultTable.id,
+          name: typeof source.name === "string" ? source.name.slice(0, 40) : "",
+          capacity: Math.round(clampNumber(source.capacity, 0, 999, defaultTable.capacity)),
+          active: source.active !== false
+        };
+      });
+
+      const validTableIds = new Set(tables.map(function(table) {
+        return table.id;
+      }));
+
+      const history = Array.isArray(candidate.history)
+        ? candidate.history
+          .filter(function(assignment) {
+            return assignment && validTableIds.has(Number(assignment.tableId));
+          })
+          .map(function(assignment, index) {
+            const tableId = Number(assignment.tableId);
+            const currentTable = tables.find(function(table) {
+              return table.id === tableId;
+            });
+
+            return {
+              id: typeof assignment.id === "string"
+                ? assignment.id
+                : "legacy-" + index + "-" + Date.now(),
+              tableId: tableId,
+              tableName: typeof assignment.tableName === "string"
+                ? assignment.tableName.slice(0, 40)
+                : currentTable.name,
+              assignedAt: typeof assignment.assignedAt === "string"
+                ? assignment.assignedAt
+                : new Date().toISOString()
+            };
+          })
+        : [];
+
+      const session = {
+        version: STATE_VERSION,
+        tables: tables,
+        history: history,
+        seatPool: [],
+        settings: {
+          sortingTime: Math.round(clampNumber(
+            candidate.settings && candidate.settings.sortingTime,
+            1000,
+            10000,
+            defaults.settings.sortingTime
+          )),
+          sound: Boolean(candidate.settings && candidate.settings.sound),
+          speech: Boolean(candidate.settings && candidate.settings.speech),
+          haptics: Boolean(candidate.settings && candidate.settings.haptics)
+        }
+      };
+
+      const assignedCounts = getAssignedCounts(session);
+
+      session.tables.forEach(function(table) {
+        table.capacity = Math.max(table.capacity, assignedCounts[table.id]);
+      });
+
+      session.seatPool = isSeatPoolValid(candidate.seatPool, session)
+        ? candidate.seatPool.slice()
+        : buildBalancedSeatPool(session);
+
+      return session;
+    }
+
+    function loadState() {
+      try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+
+        if (!saved) {
+          return normalizeState(null);
+        }
+
+        return normalizeState(JSON.parse(saved));
+      } catch (error) {
+        console.warn("The saved Sorting Hat session could not be loaded.", error);
+        return normalizeState(null);
+      }
+    }
+
+    let state = loadState();
+
+    function saveState() {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (error) {
+        console.warn("The Sorting Hat session could not be saved.", error);
+      }
+    }
+
+    /* =========================================
+       SESSION HELPERS
+    ========================================= */
+
+    function getTable(tableId) {
+      return state.tables.find(function(table) {
+        return table.id === tableId;
+      }) || null;
+    }
+
+    function getLastAssignment() {
+      return state.history.length ? state.history[state.history.length - 1] : null;
+    }
+
+    function createAssignmentId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+
+      return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+    }
+
+    function takeNextAssignment() {
+      if (!state.seatPool.length) {
+        state.seatPool = buildBalancedSeatPool(state);
+      }
+
+      if (!state.seatPool.length) {
+        return null;
+      }
+
+      const tableId = state.seatPool.shift();
+      const table = getTable(tableId);
+
+      if (!table) {
+        state.seatPool = buildBalancedSeatPool(state);
+        return takeNextAssignment();
+      }
+
+      const assignment = {
+        id: createAssignmentId(),
+        tableId: table.id,
+        tableName: table.name,
+        assignedAt: new Date().toISOString()
+      };
+
+      state.history.push(assignment);
+      saveState();
+
+      return assignment;
+    }
+
+    function updateAvailabilityUi() {
+      const remaining = state.seatPool.length;
+      const assigned = state.history.length;
+
+      elements.footerSession.textContent =
+        " | " + assigned + " assigned | " + remaining + " seats remaining";
+
+      if (isSorting || isShowingResult) {
+        return;
+      }
+
+      if (remaining <= 0) {
+        elements.hat.disabled = true;
+        elements.hat.setAttribute("aria-label", "All configured seats have been assigned");
+        elements.tapInstruction.textContent = "All configured seats are assigned";
+        elements.tapInstruction.classList.remove("is-hidden");
+        elements.tapInstruction.classList.add("is-static");
+        elements.message.textContent =
+          "Open Host controls to add seats, enable a table, or begin a new session.";
+      } else {
+        elements.hat.disabled = false;
+        elements.hat.setAttribute("aria-label", "Begin the Sorting Hat ceremony");
+        elements.tapInstruction.textContent = "Tap the hat to be sorted";
+        elements.tapInstruction.classList.remove("is-hidden", "is-static");
+
+        if (elements.message.textContent.indexOf("Open Host controls") === 0) {
+          elements.message.textContent = "The hat is waiting...";
+        }
+      }
+    }
+
+    /* =========================================
+       SOUND, SPEECH, AND HAPTICS
+    ========================================= */
+
+    function getAudioContext() {
+      if (!state.settings.sound) {
+        return null;
+      }
+
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) {
+        return null;
+      }
+
+      if (!audioContext) {
+        audioContext = new AudioContextClass();
+      }
+
+      if (audioContext.state === "suspended") {
+        audioContext.resume().catch(function() {});
+      }
+
+      return audioContext;
+    }
+
+    function scheduleTone(context, frequency, startOffset, duration, volume) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startTime = context.currentTime + startOffset;
+      const endTime = startTime + duration;
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, startTime);
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startTime);
+      oscillator.stop(endTime + 0.02);
+    }
+
+    function playSortingSound() {
+      const context = getAudioContext();
+
+      if (!context) {
+        return;
+      }
+
+      scheduleTone(context, 196, 0, 0.28, 0.035);
+      scheduleTone(context, 246.94, 0.13, 0.3, 0.026);
+    }
+
+    function playRevealSound() {
+      const context = getAudioContext();
+
+      if (!context) {
+        return;
+      }
+
+      scheduleTone(context, 392, 0, 0.5, 0.04);
+      scheduleTone(context, 493.88, 0.09, 0.55, 0.038);
+      scheduleTone(context, 587.33, 0.18, 0.62, 0.034);
+    }
+
+    function speakAssignment(assignment) {
+      if (!state.settings.speech || !window.speechSynthesis) {
+        return;
+      }
+
+      const name = assignment.tableName ? ", " + assignment.tableName : "";
+      const utterance = new SpeechSynthesisUtterance(
+        "The hat has chosen table " + assignment.tableId + name
+      );
+
+      utterance.rate = 0.82;
+      utterance.pitch = 0.9;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function vibrateReveal() {
+      if (state.settings.haptics && navigator.vibrate) {
+        navigator.vibrate([55, 45, 95]);
+      }
+    }
+
+    /* =========================================
+       SORTING CEREMONY
+    ========================================= */
+
+    function clearCeremonyTimers() {
+      if (messageInterval !== null) {
+        window.clearInterval(messageInterval);
+        messageInterval = null;
+      }
+
+      if (revealTimer !== null) {
+        window.clearTimeout(revealTimer);
+        revealTimer = null;
+      }
+    }
+
+    function beginSorting() {
+      if (isSorting || isShowingResult || !state.seatPool.length) {
+        updateAvailabilityUi();
+        return;
+      }
+
+      isSorting = true;
+      elements.hat.disabled = true;
+      elements.hostTrigger.disabled = true;
+      elements.hat.setAttribute("aria-busy", "true");
+      elements.hat.classList.add("sorting");
+      elements.hatStage.classList.add("sorting");
+      elements.tapInstruction.classList.add("is-hidden");
+      elements.message.textContent = "Hmmmm... let me see...";
+
+      playSortingSound();
+
+      let messageIndex = 0;
+      const messageDelay = prefersReducedMotion ? 800 : 650;
+
+      messageInterval = window.setInterval(function() {
+        elements.message.textContent = thinkingMessages[messageIndex % thinkingMessages.length];
+        messageIndex += 1;
+      }, messageDelay);
+
+      const effectiveSortingTime = prefersReducedMotion
+        ? Math.min(state.settings.sortingTime, 1800)
+        : state.settings.sortingTime;
+
+      revealTimer = window.setTimeout(revealTable, effectiveSortingTime);
+    }
+
+    function stopSortingVisuals() {
+      clearCeremonyTimers();
+      elements.hat.classList.remove("sorting");
+      elements.hatStage.classList.remove("sorting");
+      elements.hat.removeAttribute("aria-busy");
+      isSorting = false;
+    }
+
+    function triggerFlash() {
+      elements.flash.classList.remove("active");
+
+      if (prefersReducedMotion) {
+        return;
+      }
+
+      void elements.flash.offsetWidth;
+      elements.flash.classList.add("active");
+    }
+
+    function revealTable() {
+      const assignment = takeNextAssignment();
+
+      stopSortingVisuals();
+
+      if (!assignment) {
+        elements.hostTrigger.disabled = false;
+        updateAvailabilityUi();
+        return;
+      }
+
+      elements.message.textContent = "The hat has decided...";
+      triggerFlash();
+
+      const revealDelay = prefersReducedMotion ? 0 : 280;
+
+      window.setTimeout(function() {
+        showResult(assignment, false);
+      }, revealDelay);
+    }
+
+    function showResult(assignment, isRepeat) {
+      const table = getTable(assignment.tableId);
+      const displayName = assignment.tableName || (table ? table.name : "");
+
+      elements.resultHeading.textContent = isRepeat
+        ? "Last assignment"
+        : "The hat has chosen";
+      elements.tableNumber.textContent = String(assignment.tableId);
+      elements.tableName.textContent = displayName;
+      elements.tableName.classList.toggle("has-name", Boolean(displayName));
+
+      elements.result.classList.add("show");
+      elements.result.setAttribute("aria-hidden", "false");
+      elements.app.classList.add("is-obscured");
+      elements.app.setAttribute("aria-hidden", "true");
+      elements.app.inert = true;
+      document.body.classList.add("result-open");
+
+      isShowingResult = true;
+      elements.resultAnnouncement.textContent =
+        (isRepeat ? "Last assignment: " : "The hat has chosen ") +
+        "Table " + assignment.tableId +
+        (displayName ? ", " + displayName : "") + ".";
+
+      if (!isRepeat) {
+        playRevealSound();
+        speakAssignment(assignment);
+        vibrateReveal();
+      }
+
+      window.setTimeout(function() {
+        elements.nextGuestButton.focus({ preventScroll: true });
+      }, prefersReducedMotion ? 0 : 120);
+    }
+
+    function resetCeremony() {
+      if (!isShowingResult) {
+        return;
+      }
+
+      elements.result.classList.remove("show");
+      elements.result.setAttribute("aria-hidden", "true");
+      elements.app.classList.remove("is-obscured");
+      elements.app.removeAttribute("aria-hidden");
+      elements.app.inert = false;
+      document.body.classList.remove("result-open");
+      elements.resultAnnouncement.textContent = "";
+      elements.message.textContent = "The hat is waiting...";
+      elements.hostTrigger.disabled = false;
+      isShowingResult = false;
+
+      updateAvailabilityUi();
+
+      window.setTimeout(function() {
+        if (!elements.hat.disabled) {
+          elements.hat.focus({ preventScroll: true });
+        } else {
+          elements.hostTrigger.focus({ preventScroll: true });
+        }
+      }, 0);
+    }
+
+    /* =========================================
+       HOST PANEL
+    ========================================= */
+
+    function setHostStatus(message, isError) {
+      elements.hostStatus.textContent = message || "";
+      elements.hostStatus.classList.toggle("is-error", Boolean(isError));
+    }
+
+    function createSummaryCard(label, value) {
+      const card = document.createElement("div");
+      const labelElement = document.createElement("span");
+      const valueElement = document.createElement("span");
+
+      card.className = "summary-card";
+      labelElement.className = "summary-label";
+      valueElement.className = "summary-value";
+      labelElement.textContent = label;
+      valueElement.textContent = value;
+      card.append(labelElement, valueElement);
+
+      return card;
+    }
+
+    function renderHostPanel() {
+      const counts = getAssignedCounts(state);
+      const lastAssignment = getLastAssignment();
+      const lastTable = lastAssignment ? getTable(lastAssignment.tableId) : null;
+      const lastName = lastAssignment
+        ? (lastAssignment.tableName || (lastTable ? lastTable.name : ""))
+        : "";
+
+      elements.hostSummary.replaceChildren(
+        createSummaryCard("Assigned", String(state.history.length)),
+        createSummaryCard("Seats remaining", String(state.seatPool.length)),
+        createSummaryCard(
+          "Last result",
+          lastAssignment
+            ? "Table " + lastAssignment.tableId + (lastName ? " - " + lastName : "")
+            : "None yet"
+        )
+      );
+
+      elements.tableSettings.replaceChildren();
+
+      state.tables.forEach(function(table) {
+        const row = document.createElement("div");
+        const heading = document.createElement("div");
+        const title = document.createElement("span");
+        const count = document.createElement("span");
+        const nameLabel = document.createElement("label");
+        const nameLabelText = document.createElement("span");
+        const nameInput = document.createElement("input");
+        const capacityLabel = document.createElement("label");
+        const capacityLabelText = document.createElement("span");
+        const capacityInput = document.createElement("input");
+        const activeLabel = document.createElement("label");
+        const activeLabelText = document.createElement("span");
+        const activeWrap = document.createElement("span");
+        const activeInput = document.createElement("input");
+
+        row.className = "table-row";
+        row.dataset.tableId = String(table.id);
+
+        heading.className = "table-row-heading";
+        title.className = "table-row-title";
+        count.className = "table-row-count";
+        title.textContent = "Table " + table.id;
+        count.textContent = counts[table.id] + " assigned";
+        heading.append(title, count);
+
+        nameLabel.className = "host-field";
+        nameLabelText.className = "host-field-label";
+        nameLabelText.textContent = "Optional name";
+        nameInput.className = "table-name-input";
+        nameInput.type = "text";
+        nameInput.maxLength = 40;
+        nameInput.value = table.name;
+        nameInput.placeholder = "e.g. Great Hall";
+        nameLabel.append(nameLabelText, nameInput);
+
+        capacityLabel.className = "host-field";
+        capacityLabelText.className = "host-field-label";
+        capacityLabelText.textContent = "Total seats";
+        capacityInput.className = "table-capacity-input";
+        capacityInput.type = "number";
+        capacityInput.min = String(counts[table.id]);
+        capacityInput.max = "999";
+        capacityInput.step = "1";
+        capacityInput.inputMode = "numeric";
+        capacityInput.value = String(table.capacity);
+        capacityLabel.append(capacityLabelText, capacityInput);
+
+        activeLabel.className = "host-field";
+        activeLabelText.className = "host-field-label";
+        activeLabelText.textContent = "Available";
+        activeWrap.className = "table-active-wrap";
+        activeInput.className = "table-active-input";
+        activeInput.type = "checkbox";
+        activeInput.checked = table.active;
+        activeWrap.append(activeInput, document.createTextNode(" Active"));
+        activeLabel.append(activeLabelText, activeWrap);
+
+        row.append(heading, nameLabel, capacityLabel, activeLabel);
+        elements.tableSettings.appendChild(row);
+      });
+
+      elements.sortingTimeInput.value = (state.settings.sortingTime / 1000).toFixed(1);
+      elements.soundInput.checked = state.settings.sound;
+      elements.speechInput.checked = state.settings.speech;
+      elements.hapticsInput.checked = state.settings.haptics;
+      elements.undoButton.disabled = state.history.length === 0;
+      elements.repeatButton.disabled = state.history.length === 0;
+      elements.exportButton.disabled = state.history.length === 0;
+    }
+
+    function openHostDialog() {
+      if (isSorting || isShowingResult || elements.hostDialog.open) {
+        return;
+      }
+
+      renderHostPanel();
+      setHostStatus("");
+      elements.hostDialog.showModal();
+    }
+
+    function closeHostDialog() {
+      if (elements.hostDialog.open) {
+        elements.hostDialog.close();
+      }
+    }
+
+    function applyHostSettings(event) {
+      event.preventDefault();
+
+      const counts = getAssignedCounts(state);
+      let adjustedCapacity = false;
+
+      elements.tableSettings.querySelectorAll(".table-row").forEach(function(row) {
+        const tableId = Number(row.dataset.tableId);
+        const table = getTable(tableId);
+
+        if (!table) {
+          return;
+        }
+
+        const nameInput = row.querySelector(".table-name-input");
+        const capacityInput = row.querySelector(".table-capacity-input");
+        const activeInput = row.querySelector(".table-active-input");
+        const requestedCapacity = Math.round(clampNumber(
+          capacityInput.value,
+          0,
+          999,
+          table.capacity
+        ));
+        const minimumCapacity = counts[table.id];
+
+        if (requestedCapacity < minimumCapacity) {
+          adjustedCapacity = true;
+        }
+
+        table.name = nameInput.value.trim().slice(0, 40);
+        table.capacity = Math.max(requestedCapacity, minimumCapacity);
+        table.active = activeInput.checked;
+      });
+
+      state.settings.sortingTime = Math.round(
+        clampNumber(elements.sortingTimeInput.value, 1, 10, 4.2) * 1000
+      );
+      state.settings.sound = elements.soundInput.checked;
+      state.settings.speech = elements.speechInput.checked;
+      state.settings.haptics = elements.hapticsInput.checked;
+      state.seatPool = buildBalancedSeatPool(state);
+
+      saveState();
+      updateAvailabilityUi();
+      renderHostPanel();
+      setHostStatus(
+        adjustedCapacity
+          ? "Settings saved. A capacity below its assigned count was raised automatically."
+          : "Settings saved. The remaining assignment pool has been rebalanced.",
+        false
+      );
+    }
+
+    function undoLastAssignment() {
+      if (!state.history.length) {
+        setHostStatus("There is no assignment to undo.", true);
+        return;
+      }
+
+      const removed = state.history.pop();
+      state.seatPool = buildBalancedSeatPool(state);
+      saveState();
+      updateAvailabilityUi();
+      renderHostPanel();
+      setHostStatus("Removed the last assignment: Table " + removed.tableId + ".", false);
+    }
+
+    function repeatLastAssignment() {
+      const assignment = getLastAssignment();
+
+      if (!assignment) {
+        setHostStatus("There is no result to display.", true);
+        return;
+      }
+
+      closeHostDialog();
+      showResult(assignment, true);
+    }
+
+    function csvCell(value) {
+      return '"' + String(value == null ? "" : value).replace(/"/g, '""') + '"';
+    }
+
+    function exportAssignments() {
+      if (!state.history.length) {
+        setHostStatus("There are no assignments to export.", true);
+        return;
+      }
+
+      const rows = [
+        ["Assignment", "Table", "Table name", "Assigned at"]
+      ];
+
+      state.history.forEach(function(assignment, index) {
+        const table = getTable(assignment.tableId);
+        const name = assignment.tableName || (table ? table.name : "");
+
+        rows.push([
+          index + 1,
+          assignment.tableId,
+          name,
+          assignment.assignedAt
+        ]);
+      });
+
+      const csv = rows.map(function(row) {
+        return row.map(csvCell).join(",");
+      }).join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+
+      link.href = url;
+      link.download = "sorting-hat-assignments-" + date + ".csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function() {
+        URL.revokeObjectURL(url);
+      }, 1000);
+      setHostStatus("Assignment CSV exported.", false);
+    }
+
+    function startNewSession() {
+      const confirmed = window.confirm(
+        "Start a new sorting session? This clears all assignments but keeps your table settings."
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      state.history = [];
+      state.seatPool = buildBalancedSeatPool(state);
+      saveState();
+      updateAvailabilityUi();
+      renderHostPanel();
+      setHostStatus("A new session has started.", false);
+    }
+
+    /* =========================================
+       MAGIC PARTICLES
+    ========================================= */
+
+    function createStars() {
+      elements.stars.replaceChildren();
+
+      if (prefersReducedMotion) {
+        return;
+      }
+
+      const starCount = window.innerWidth < 600 ? 52 : 78;
+      const fragment = document.createDocumentFragment();
+
+      for (let index = 0; index < starCount; index += 1) {
+        const star = document.createElement("span");
+        star.className = "star";
+        star.style.left = Math.random() * 100 + "%";
+        star.style.top = Math.random() * 100 + "%";
+        star.style.animationDelay = Math.random() * 5 + "s";
+        star.style.animationDuration = 2 + Math.random() * 5 + "s";
+        fragment.appendChild(star);
+      }
+
+      elements.stars.appendChild(fragment);
+    }
+
+    /* =========================================
+       EVENTS
+    ========================================= */
+
+    elements.hat.addEventListener("click", beginSorting);
+
+    elements.nextGuestButton.addEventListener("click", function(event) {
+      event.stopPropagation();
+      resetCeremony();
+    });
+
+    elements.result.addEventListener("click", function(event) {
+      if (!event.target.closest("button")) {
+        resetCeremony();
+      }
+    });
+
+    elements.hostTrigger.addEventListener("click", openHostDialog);
+    elements.hostClose.addEventListener("click", closeHostDialog);
+    elements.hostForm.addEventListener("submit", applyHostSettings);
+    elements.undoButton.addEventListener("click", undoLastAssignment);
+    elements.repeatButton.addEventListener("click", repeatLastAssignment);
+    elements.exportButton.addEventListener("click", exportAssignments);
+    elements.newSessionButton.addEventListener("click", startNewSession);
+
+    elements.hostDialog.addEventListener("click", function(event) {
+      if (event.target === elements.hostDialog) {
+        closeHostDialog();
+      }
+    });
+
+    document.addEventListener("keydown", function(event) {
+      if (event.key === "Escape" && isShowingResult) {
+        event.preventDefault();
+        resetCeremony();
+        return;
+      }
+
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "h") {
+        event.preventDefault();
+        openHostDialog();
+      }
+    });
+
+    function cancelLongPress() {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    }
+
+    elements.footer.addEventListener("pointerdown", function() {
+      cancelLongPress();
+      longPressTimer = window.setTimeout(openHostDialog, 900);
+    });
+
+    elements.footer.addEventListener("pointerup", cancelLongPress);
+    elements.footer.addEventListener("pointercancel", cancelLongPress);
+    elements.footer.addEventListener("pointerleave", cancelLongPress);
+
+    function handleMotionPreferenceChange(event) {
+      prefersReducedMotion = event.matches;
+      createStars();
+    }
+
+    if (typeof reducedMotionQuery.addEventListener === "function") {
+      reducedMotionQuery.addEventListener("change", handleMotionPreferenceChange);
+    } else if (typeof reducedMotionQuery.addListener === "function") {
+      reducedMotionQuery.addListener(handleMotionPreferenceChange);
+    }
+
+    /* =========================================
+       INITIALIZE
+    ========================================= */
+
+    if (!isSeatPoolValid(state.seatPool, state)) {
+      state.seatPool = buildBalancedSeatPool(state);
+      saveState();
+    }
+
+    createStars();
+    updateAvailabilityUi();
+
+    const queryParameters = new URLSearchParams(window.location.search);
+
+    if (queryParameters.get("admin") === "true") {
+      window.setTimeout(openHostDialog, 0);
+    }
+  </script>
+</body>
+</html>
